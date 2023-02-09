@@ -4,15 +4,20 @@ import math
 import subprocess
 import os
 import signal
-import gphoto2 as gp
 import time
+try:
+    from controllers.gphoto_context import GPhotoContext as gpContext
+except ImportError:
+    from controllers.gphoto_context_mock import GPhotoContextMock as gpContext
 
 from piir.io import receive
 from piir.decode import decode
 from piir.prettify import prettify
+from controllers.ir_codes_data import IRCodesData
 
 time_laps_thread = None
 camera = None
+ir_codes = None
 # @TODO: from string to singleton objects
 DISPLAY_MODES = ["DELAY", "COUNTER", "TIMER"]
 MODE = multiprocessing.Value('i', 0)
@@ -34,15 +39,6 @@ IRINPUT = 25
 
 displayPin = (10, 22, 27, 17)
 number = (0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f)
-
-ir_codes = {
-    "DOWN": 7,
-    "UP": 15,
-    "PREV": 44,
-    "NEXT": 40,
-    "PLAY": 43,
-    "EQ": 9
-}
 
 
 def clear_display():
@@ -70,6 +66,10 @@ def pick_digit(digit):
 
 
 def setup():
+    global ir_codes
+    ir_loader = IRCodesData()
+    ir_codes = ir_loader.load()
+
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(SDI, GPIO.OUT, initial=GPIO.LOW)
     GPIO.setup(RCLK, GPIO.OUT, initial=GPIO.LOW)
@@ -230,30 +230,30 @@ def unmount_camera():
 
 def init_camera():
     global camera
-    camera = gp.Camera()
-    print('Please connect and switch on your camera')
-    i = 0
-    while i < MAX_RETRY:
-        i += 1
-        print("Init camera, try number: " + str(i))
-        try:
-            camera.init()
-            print("camera init successfully!")
-        except gp.GPhoto2Error as ex:
-            print(ex)
-            if ex.code == gp.GP_ERROR_MODEL_NOT_FOUND:
-                time.sleep(2)
-                continue
-            raise
-        break
+#     camera = gp.Camera()
+#     print('Please connect and switch on your camera')
+#     i = 0
+#     while i < MAX_RETRY:
+#         i += 1
+#         print("Init camera, try number: " + str(i))
+#         try:
+#             camera.init()
+#             print("camera init successfully!")
+#         except gp.GPhoto2Error as ex:
+#             print(ex)
+#             if ex.code == gp.GP_ERROR_MODEL_NOT_FOUND:
+#                 time.sleep(2)
+#                 continue
+#             raise
+#         break
 
 
 def start_time_laps(d, c):
     while True:
         print('Capturing image')
-        file_path = camera.capture(gp.GP_CAPTURE_IMAGE)
+        # file_path = camera.capture(gp.GP_CAPTURE_IMAGE)
         c.value += 1
-        print('Camera file path: {0}/{1}'.format(file_path.folder, file_path.name))
+        # print('Camera file path: {0}/{1}'.format(file_path.folder, file_path.name))
         print('Count: ' + str(c))
         time.sleep(d.value)
 
@@ -266,21 +266,3 @@ if __name__ == '__main__':
         destroy()
 
 
-class ApplicationContext:
-    def __init__(self):
-        pass
-
-
-class IRActionDispatcher:
-    def __init__(self):
-        pass
-
-
-class GPhotoContext:
-    def __init__(self):
-        self.camera = None
-
-
-class DigitDisplayUtils:
-    def __init__(self):
-        pass
