@@ -1,6 +1,9 @@
 from controllers.gphoto_context_base import GPhotoContextBase
 import gphoto2 as gp
 import time
+import subprocess
+import os
+import signal
 
 
 class GPhotoContext(GPhotoContextBase):
@@ -27,4 +30,16 @@ class GPhotoContext(GPhotoContextBase):
             break
 
     def capture_image(self):
+        if self.camera is None:
+            return None
+
         return self.camera.capture(gp.GP_CAPTURE_IMAGE)
+
+    def unmount_camera(self):
+        p = subprocess.Popen(["ps", "-A"], stdout=subprocess.PIPE)
+        out, err = p.communicate()
+
+        for line in out.splitlines():
+            if b'-gphoto' in line:
+                pid = int(line.split(None, 1)[0])
+                os.kill(pid, signal.SIGKILL)

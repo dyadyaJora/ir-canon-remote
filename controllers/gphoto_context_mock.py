@@ -15,3 +15,6 @@ class GPhotoContextMock(GPhotoContextBase):
         print("Capturing image...")
         time.sleep(2)
         print("Capture complete!")
+
+    def unmount_camera(self):
+        print("Unmount camera mock")

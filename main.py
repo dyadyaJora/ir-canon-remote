@@ -1,14 +1,10 @@
 import RPi.GPIO as GPIO
 import multiprocessing
-import math
-import subprocess
-import os
-import signal
 import time
 try:
-    from controllers.gphoto_context import GPhotoContext as gpContext
+    from controllers.gphoto_context import GPhotoContext
 except ImportError:
-    from controllers.gphoto_context_mock import GPhotoContextMock as gpContext
+    from controllers.gphoto_context_mock import GPhotoContextMock as GPhotoContext
 
 from piir.io import receive
 from piir.decode import decode
@@ -18,6 +14,7 @@ from controllers.ir_codes_data import IRCodesData
 time_laps_thread = None
 camera = None
 ir_codes = None
+gpContext = GPhotoContext()
 # @TODO: from string to singleton objects
 DISPLAY_MODES = ["DELAY", "COUNTER", "TIMER"]
 MODE = multiprocessing.Value('i', 0)
@@ -31,7 +28,6 @@ delay = multiprocessing.Value('i', 1)
 time_left = multiprocessing.Value('i', 2)
 count = multiprocessing.Value('i', 0)
 
-MAX_RETRY = 3
 SDI = 24
 RCLK = 23
 SRCLK = 18
@@ -213,47 +209,18 @@ def action_reset():
     delay.value = 1
     time_left.value = 2
     count.value = 0
-    unmount_camera()
-    init_camera()
+    gpContext.unmount_camera()
+    gpContext.init_camera()
     print("Reset was complete!")
-
-
-def unmount_camera():
-    p = subprocess.Popen(["ps", "-A"], stdout=subprocess.PIPE)
-    out, err = p.communicate()
-
-    for line in out.splitlines():
-        if b'-gphoto' in line:
-            pid = int(line.split(None, 1)[0])
-            os.kill(pid, signal.SIGKILL)
-
-
-def init_camera():
-    global camera
-#     camera = gp.Camera()
-#     print('Please connect and switch on your camera')
-#     i = 0
-#     while i < MAX_RETRY:
-#         i += 1
-#         print("Init camera, try number: " + str(i))
-#         try:
-#             camera.init()
-#             print("camera init successfully!")
-#         except gp.GPhoto2Error as ex:
-#             print(ex)
-#             if ex.code == gp.GP_ERROR_MODEL_NOT_FOUND:
-#                 time.sleep(2)
-#                 continue
-#             raise
-#         break
 
 
 def start_time_laps(d, c):
     while True:
         print('Capturing image')
-        # file_path = camera.capture(gp.GP_CAPTURE_IMAGE)
+        file_path = gpContext.capture_image()
         c.value += 1
-        # print('Camera file path: {0}/{1}'.format(file_path.folder, file_path.name))
+        if file_path is not None:
+            print('Camera file path: {0}/{1}'.format(file_path.folder, file_path.name))
         print('Count: ' + str(c))
         time.sleep(d.value)
 

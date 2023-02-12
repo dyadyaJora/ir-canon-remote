@@ -4,3 +4,6 @@ class GPhotoContextBase:
 
     def capture_image(self):
         pass
+
+    def unmount_camera(self):
+        pass
