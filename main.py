@@ -1,5 +1,4 @@
 import pigpio
-# import multiprocessing
 import threading
 import time
 
@@ -21,20 +20,14 @@ class ApplicationContext:
     gpContext = GPhotoContext()
     # @TODO: from string to singleton objects
     DISPLAY_MODES = ["DELAY", "COUNTER", "TIMER"]
-    # MODE = multiprocessing.Value('i', 0)
     MODE = 0
 
     STATES = ["WAITING", "RUNNING", "ERROR"]
-    # STATE = multiprocessing.Value('i', 0)
     STATE = 0
 
     MAX_DELAY = 100
-    # @TODO move to class fields
-    # delay = multiprocessing.Value('i', 1)
     delay = 1
-    # time_left = multiprocessing.Value('i', 2)
     time_left = 2
-    # count = multiprocessing.Value('i', 0)
     count = 0
 
     SDI = 24
@@ -63,7 +56,7 @@ class ApplicationContext:
 
     def hc595_shift(self, data):
         for i in range(8):
-            self.pi.write(self.SDI, 0x80 & (data << i))
+            self.pi.write(self.SDI, 0x80 & (data << i) == 0x80)
             self.pi.write(self.SRCLK, self.HIGH)
             self.pi.write(self.SRCLK, self.LOW)
         self.pi.write(self.RCLK, self.HIGH)
@@ -90,7 +83,7 @@ class ApplicationContext:
 
         self.action_reset()
 
-        ir_receive_thread = threading.Thread(target=self.read_ir, args=(self.delay, self.MODE, self.STATE))
+        ir_receive_thread = threading.Thread(target=self.read_ir)
         ir_receive_thread.start()
 
     def loop(self):
@@ -127,7 +120,7 @@ class ApplicationContext:
     def destroy(self):
         self.pi.stop()
 
-    def read_ir(self, d, mode, state):
+    def read_ir(self):
         keys = {}
 
         while True:
@@ -149,60 +142,60 @@ class ApplicationContext:
                     ir_code = int(l.replace(' ', ''))
                     if self.ir_codes['EQ'] == ir_code:
                         self.action_reset()
-                    elif self.STATES[self.STATE.value] == 'ERROR':
+                    elif self.STATES[self.STATE] == 'ERROR':
                         break
                     else:
                         if self.ir_codes['PREV'] == ir_code:
-                            self.action_next_display(mode)
+                            self.action_next_display()
                         elif self.ir_codes['NEXT'] == ir_code:
-                            self.action_next_display(mode, is_forward=False)
+                            self.action_next_display(is_forward=False)
                         else:
-                            if self.STATES[self.STATE.value] == 'WAITING':
+                            if self.STATES[self.STATE] == 'WAITING':
                                 if self.ir_codes['UP'] == ir_code:
-                                    self.action_inc_delay(d)
+                                    self.action_inc_delay()
                                 elif self.ir_codes['DOWN'] == ir_code:
-                                    self.action_dec_delay(d)
+                                    self.action_dec_delay()
                                 elif self.ir_codes['PLAY'] == ir_code:
-                                    self.action_play(state)
+                                    self.action_play()
                                 else:
                                     print("unknown command")
-                            elif self.STATES[self.STATE.value] == 'RUNNING':
+                            elif self.STATES[self.STATE] == 'RUNNING':
                                 if self.ir_codes['PLAY'] == ir_code:
-                                    self.action_pause(state)
+                                    self.action_pause()
                                 else:
                                     print("unknown command")
                             else:
                                 print("unknown command")
 
-    def action_inc_delay(self, d):
-        d.value = (d.value + 1) % self.MAX_DELAY
-        print("NEW_DELAY" + str(d))
+    def action_inc_delay(self):
+        self.delay = (self.delay + 1) % self.MAX_DELAY
+        print("NEW_DELAY" + str(self.delay))
 
-    def action_dec_delay(self, d):
-        d.value = (d.value - 1) % self.MAX_DELAY
-        print("NEW_DELAY" + str(d))
+    def action_dec_delay(self):
+        self.delay = (self.delay - 1) % self.MAX_DELAY
+        print("NEW_DELAY" + str(self.delay))
 
-    def action_next_display(self, mode, is_forward=True):
-        i = mode.value
+    def action_next_display(self, is_forward=True):
+        i = self.MODE
         if is_forward:
             i += 1
         else:
             i -= 1
-        mode.value = i % len(self.DISPLAY_MODES)
+        self.MODE = i % len(self.DISPLAY_MODES)
 
-    def action_play(self, state):
+    def action_play(self):
         print("BEFORE" + str(self.time_laps_thread))
         time_laps_thread = threading.Thread(target=self.start_time_laps, args=(self.delay, self.count))
         time_laps_thread.start()
         # @TODO: change status only if thread started
-        state.value = self.STATES.index('RUNNING')
+        self.STATE = self.STATES.index('RUNNING')
         print("AFTER" + str(time_laps_thread))
 
-    def action_pause(self, state):
+    def action_pause(self):
         print(self.time_laps_thread)
         if self.time_laps_thread is not None:
             self.time_laps_thread.terminate()
-            state.value = self.STATES.index('WAITING')
+            self.STATE = self.STATES.index('WAITING')
 
     def action_reset(self):
         print("Resetting...")
@@ -217,11 +210,11 @@ class ApplicationContext:
         while True:
             print('Capturing image')
             file_path = self.gpContext.capture_image()
-            c.value += 1
+            c += 1
             if file_path is not None:
                 print('Camera file path: {0}/{1}'.format(file_path.folder, file_path.name))
             print('Count: ' + str(c))
-            time.sleep(d.value)
+            time.sleep(d)
 
     def run(self):
         self.setup()
