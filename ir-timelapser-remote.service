@@ -1,0 +1,13 @@
+[Unit]
+Description=IR timelapser systemd service
+
+[Service]
+Type=simple
+WorkingDirectory=/app/ir-timelapser
+User=pi
+#Environment=
+ExecStart=python3 /app/ir-timelapser/main.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
