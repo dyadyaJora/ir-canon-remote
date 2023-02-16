@@ -1,10 +1,29 @@
 [[package]]
-name = "gphoto2"
-version = "2.3.4"
-description = "Python interface to libgphoto2"
+name = "colorzero"
+version = "2.0"
+description = "Yet another Python color library"
 category = "main"
 optional = false
 python-versions = "*"
+
+[package.extras]
+doc = ["pkginfo", "sphinx", "sphinx-rtd-theme"]
+test = ["pytest", "pytest-cov"]
+
+[[package]]
+name = "gpiozero"
+version = "1.6.2"
+description = "A simple interface to GPIO devices with Raspberry Pi."
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+colorzero = "*"
+
+[package.extras]
+doc = ["sphinx", "sphinx-rtd-theme"]
+test = ["pytest", "coverage", "mock", "rpi.gpio", "pigpio"]
 
 [[package]]
 name = "pigpio"
@@ -28,9 +47,10 @@ pigpio = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.6"
-content-hash = "8388b3edb57f97dba3f3b3c96c3d526413e4f986b701410b8bf23577a9744a05"
+content-hash = "15a600acf3c7e35eb19059a7c1dc22dcaee19c2fc5437fe34727e6321332f30d"
 
 [metadata.files]
-gphoto2 = []
+colorzero = []
+gpiozero = []
 pigpio = []
 piir = []

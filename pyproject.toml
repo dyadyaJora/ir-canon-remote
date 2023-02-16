@@ -8,6 +8,7 @@ authors = ["dyadyaJora <ja_massa97@mail.ru>"]
 python = "^3.6"
 pigpio = "^1.78"
 PiIR = "^0.2.5"
+gpiozero = "^1.6.2"
 
 [tool.poetry.dev-dependencies]
 
