@@ -1,16 +1,28 @@
 import pigpio
 import threading
 import time
+import enum
+
+from controllers.device_utils import IRReceiver, LEDMultiCharDisplayWithShifter
 
 try:
     from controllers.gphoto_context import GPhotoContext
 except ImportError:
     from controllers.gphoto_context_mock import GPhotoContextMock as GPhotoContext
 
-from piir.io import receive
-from piir.decode import decode
-from piir.prettify import prettify
 from controllers.ir_codes_data import IRCodesData
+
+
+class State(enum.Enum):
+    WAITING = 0
+    RUNNING = 1
+    ERROR = 2
+
+
+class DisplayMode(enum.Enum):
+    DELAY = 0
+    COUNTER = 1
+    TIMER = 2
 
 
 class ApplicationContext:
@@ -18,12 +30,8 @@ class ApplicationContext:
     camera = None
     ir_codes = None
     gpContext = GPhotoContext()
-    # @TODO: from string to singleton objects
-    DISPLAY_MODES = ["DELAY", "COUNTER", "TIMER"]
-    MODE = 0
-
-    STATES = ["WAITING", "RUNNING", "ERROR"]
-    STATE = 0
+    MODE = DisplayMode.DELAY
+    STATE = State.WAITING
 
     MAX_DELAY = 100
     delay = 1
@@ -45,46 +53,20 @@ class ApplicationContext:
         self.pi = pigpio.pi()
         if not self.pi.connected:
             raise IOError
-
-    def clear_display(self):
-        for i in range(8):
-            self.pi.write(self.SDI, self.LOW)
-            self.pi.write(self.SRCLK, self.HIGH)
-            self.pi.write(self.SRCLK, self.LOW)
-        self.pi.write(self.RCLK, self.HIGH)
-        self.pi.write(self.RCLK, self.LOW)
-
-    def hc595_shift(self, data):
-        for i in range(8):
-            self.pi.write(self.SDI, 0x80 & (data << i) == 0x80)
-            self.pi.write(self.SRCLK, self.HIGH)
-            self.pi.write(self.SRCLK, self.LOW)
-        self.pi.write(self.RCLK, self.HIGH)
-        self.pi.write(self.RCLK, self.LOW)
-
-    def pick_digit(self, digit):
-        for i in self.displayPin:
-            self.pi.write(i, self.HIGH)
-        self.pi.write(self.displayPin[digit], self.LOW)
+        self.ir_receiver = None
+        self.led_display = None
 
     def setup(self):
         ir_loader = IRCodesData()
         self.ir_codes = ir_loader.load()
 
-        self.pi.set_mode(self.SDI, pigpio.OUTPUT)
-        self.pi.write(self.SDI, self.LOW)
-        self.pi.set_mode(self.RCLK, pigpio.OUTPUT)
-        self.pi.write(self.RCLK, self.LOW)
-        self.pi.set_mode(self.SRCLK, pigpio.OUTPUT)
-        self.pi.write(self.SRCLK, self.LOW)
-
-        for i in self.displayPin:
-            self.pi.write(i, pigpio.OUTPUT)
-
         self.action_reset()
 
-        ir_receive_thread = threading.Thread(target=self.read_ir)
-        ir_receive_thread.start()
+        self.led_display = LEDMultiCharDisplayWithShifter(4, self.SDI, self.SRCLK, self.RCLK, self.displayPin)
+        self.led_display.setup()
+
+        self.ir_receiver = IRReceiver(self.IRINPUT, self.handle_ir_code)
+        self.ir_receiver.start()
 
     def loop(self):
         # https://github.com/gpiozero/gpiozero/blob/45bccc6201d393fec8f96271f94003fe20138c74/gpiozero/fonts.py
@@ -98,9 +80,9 @@ class ApplicationContext:
         self.print_digit(self.STATE, 3, dp=True)
 
     def print_display(self):
-        if self.DISPLAY_MODES[self.MODE] == "DELAY":
+        if DisplayMode.DELAY == self.MODE:
             self.print_3digit(self.delay)
-        elif self.DISPLAY_MODES[self.MODE] == "COUNTER":
+        elif DisplayMode.COUNTER == self.MODE:
             self.print_3digit(self.count)
         else:
             self.print_3digit(self.time_left)
@@ -120,52 +102,35 @@ class ApplicationContext:
     def destroy(self):
         self.pi.stop()
 
-    def read_ir(self):
-        keys = {}
-
-        while True:
-            data = decode(receive(self.IRINPUT))
-            if data:
-                keys['last'] = data
-                data_parsed = prettify(keys)
-                print(data_parsed)
-                pressed_keys = data_parsed['keys']['last']
-                if type(pressed_keys) is str:
-                    last = [pressed_keys]
-                elif type(pressed_keys) is list:
-                    last = pressed_keys
+    def handle_ir_code(self, last):
+        for l in last:
+            ir_code = int(l.replace(' ', ''))
+            if self.ir_codes['EQ'] == ir_code:
+                self.action_reset()
+            elif State.ERROR == self.STATE:
+                break
+            else:
+                if self.ir_codes['PREV'] == ir_code:
+                    self.action_next_display()
+                elif self.ir_codes['NEXT'] == ir_code:
+                    self.action_next_display(is_forward=False)
                 else:
-                    print('unknown pressed key type')
-                    continue
-
-                for l in last:
-                    ir_code = int(l.replace(' ', ''))
-                    if self.ir_codes['EQ'] == ir_code:
-                        self.action_reset()
-                    elif self.STATES[self.STATE] == 'ERROR':
-                        break
-                    else:
-                        if self.ir_codes['PREV'] == ir_code:
-                            self.action_next_display()
-                        elif self.ir_codes['NEXT'] == ir_code:
-                            self.action_next_display(is_forward=False)
+                    if State.WAITING == self.STATE:
+                        if self.ir_codes['UP'] == ir_code:
+                            self.action_inc_delay()
+                        elif self.ir_codes['DOWN'] == ir_code:
+                            self.action_dec_delay()
+                        elif self.ir_codes['PLAY'] == ir_code:
+                            self.action_play()
                         else:
-                            if self.STATES[self.STATE] == 'WAITING':
-                                if self.ir_codes['UP'] == ir_code:
-                                    self.action_inc_delay()
-                                elif self.ir_codes['DOWN'] == ir_code:
-                                    self.action_dec_delay()
-                                elif self.ir_codes['PLAY'] == ir_code:
-                                    self.action_play()
-                                else:
-                                    print("unknown command")
-                            elif self.STATES[self.STATE] == 'RUNNING':
-                                if self.ir_codes['PLAY'] == ir_code:
-                                    self.action_pause()
-                                else:
-                                    print("unknown command")
-                            else:
-                                print("unknown command")
+                            print("unknown command")
+                    elif State.RUNNING == self.STATE:
+                        if self.ir_codes['PLAY'] == ir_code:
+                            self.action_pause()
+                        else:
+                            print("unknown command")
+                    else:
+                        print("unknown command")
 
     def action_inc_delay(self):
         self.delay = (self.delay + 1) % self.MAX_DELAY
@@ -181,21 +146,21 @@ class ApplicationContext:
             i += 1
         else:
             i -= 1
-        self.MODE = i % len(self.DISPLAY_MODES)
+        self.MODE = i % len(DisplayMode)
 
     def action_play(self):
         print("BEFORE" + str(self.time_laps_thread))
         time_laps_thread = threading.Thread(target=self.start_time_laps, args=(self.delay, self.count))
         time_laps_thread.start()
         # @TODO: change status only if thread started
-        self.STATE = self.STATES.index('RUNNING')
+        self.STATE = State.RUNNING
         print("AFTER" + str(time_laps_thread))
 
     def action_pause(self):
         print(self.time_laps_thread)
         if self.time_laps_thread is not None:
             self.time_laps_thread.terminate()
-            self.STATE = self.STATES.index('WAITING')
+            self.STATE = State.WAITING
 
     def action_reset(self):
         print("Resetting...")
@@ -226,5 +191,3 @@ class ApplicationContext:
 
 if __name__ == '__main__':
     ApplicationContext().run()
-
-
