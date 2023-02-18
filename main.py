@@ -30,13 +30,8 @@ class ApplicationContext:
     camera = None
     ir_codes = None
     gpContext = GPhotoContext()
-    MODE = DisplayMode.DELAY
-    STATE = State.WAITING
 
     MAX_DELAY = 100
-    delay = 1
-    time_left = 2
-    count = 0
 
     SDI = 24
     RCLK = 23
@@ -56,58 +51,110 @@ class ApplicationContext:
         self.ir_receiver = None
         self.led_display = None
 
+        self.time_laps_thread = None
+        self._stop_event = threading.Event()
+        self._stop_event.is_set()
+
+        self._status = State.WAITING
+        self._mode = DisplayMode.DELAY
+
+        self._delay = 1
+        self._time_left = 2
+        self._count = 0
+
+    @property
+    def delay(self):
+        return self._delay
+
+    @delay.setter
+    def delay(self, value):
+        self._delay = value
+
+        if DisplayMode.DELAY == self._mode:
+            self.print_3digit_to_led(self._delay)
+
+    @property
+    def count(self):
+        return self._count
+
+    @count.setter
+    def count(self, value):
+        self._count = value
+
+        if DisplayMode.COUNTER == self._mode:
+            self.print_3digit_to_led(self._count)
+
+    @property
+    def time_left(self):
+        return self._time_left
+
+    @time_left.setter
+    def time_left(self, value):
+        self._time_left = value
+
+        if DisplayMode.TIMER == self._mode:
+            self.print_3digit_to_led(self._time_left)
+
+    @property
+    def status(self):
+        return self._status
+
+    @status.setter
+    def status(self, value):
+        self._status = value
+
+        self.led_display.set_value_char(str(self._status.value), 3, dp=True)
+
+    @property
+    def mode(self):
+        return self._mode
+
+    @mode.setter
+    def mode(self, value):
+        self._mode = value
+
+        if DisplayMode.DELAY == self._mode:
+            self.print_3digit_to_led(self._delay)
+        elif DisplayMode.COUNTER == self._mode:
+            self.print_3digit_to_led(self._count)
+        else:
+            self.print_3digit_to_led(self._time_left)
+
+    def print_3digit_to_led(self, n):
+        self.led_display.set_value_char(str(n % 10), 0)
+        self.led_display.set_value_char(str(n % 100 // 10), 1)
+        self.led_display.set_value_char(str(n % 1000 // 100), 2)
+
     def setup(self):
         ir_loader = IRCodesData()
         self.ir_codes = ir_loader.load()
 
+        self.led_display = LEDMultiCharDisplayWithShifter(4, self.SDI, self.SRCLK, self.RCLK, self.displayPin)
         self.action_reset()
 
-        self.led_display = LEDMultiCharDisplayWithShifter(4, self.SDI, self.SRCLK, self.RCLK, self.displayPin)
-        self.led_display.setup()
+        # self.led_display.start()
 
         self.ir_receiver = IRReceiver(self.IRINPUT, self.handle_ir_code)
         self.ir_receiver.start()
 
     def loop(self):
-        # https://github.com/gpiozero/gpiozero/blob/45bccc6201d393fec8f96271f94003fe20138c74/gpiozero/fonts.py
         while True:
-            self.print_display()
-            self.print_status()
-            # time.sleep(1)
-            # print(delay)
-
-    def print_status(self):
-        self.print_digit(self.STATE.value, 3, dp=True)
-
-    def print_display(self):
-        if DisplayMode.DELAY == self.MODE:
-            self.print_3digit(self.delay)
-        elif DisplayMode.COUNTER == self.MODE:
-            self.print_3digit(self.count)
-        else:
-            self.print_3digit(self.time_left)
-
-    def print_3digit(self, n):
-        self.print_digit(n % 10, 0)
-        self.print_digit(n % 100 // 10, 1)
-        self.print_digit(n % 1000 // 100, 2)
-
-    def print_digit(self, n, i, dp=False):
-        self.led_display.clear_display()
-        self.led_display.pick_digit(i)
-        hex_val = self.number[n] | 128 if dp else self.number[n]
-        # hex_val = number[n]
-        self.led_display.hc595_shift(hex_val)
+            self.led_display.display_value()
 
     def destroy(self):
         self.pi.stop()
 
     def handle_ir_code(self, last):
         for l in last:
-            ir_code = int(l.replace(' ', ''))
+            try:
+                ir_code = int(l.replace(' ', ''))
+            except ValueError:
+                print('could not parse int code from: ' + l)
+                continue
+
             if self.ir_codes['EQ'] == ir_code:
                 self.action_reset()
-            elif State.ERROR == self.STATE:
+            elif State.ERROR == self.status:
                 break
             else:
                 if self.ir_codes['PREV'] == ir_code:
@@ -115,7 +162,7 @@ class ApplicationContext:
                 elif self.ir_codes['NEXT'] == ir_code:
                     self.action_next_display(is_forward=False)
                 else:
-                    if State.WAITING == self.STATE:
+                    if State.WAITING == self.status:
                         if self.ir_codes['UP'] == ir_code:
                             self.action_inc_delay()
                         elif self.ir_codes['DOWN'] == ir_code:
@@ -124,7 +171,7 @@ class ApplicationContext:
                             self.action_play()
                         else:
                             print("unknown command")
-                    elif State.RUNNING == self.STATE:
+                    elif State.RUNNING == self.status:
                         if self.ir_codes['PLAY'] == ir_code:
                             self.action_pause()
                         else:
@@ -141,45 +188,50 @@ class ApplicationContext:
         print("NEW_DELAY" + str(self.delay))
 
     def action_next_display(self, is_forward=True):
-        i = self.MODE
+        i = self.mode.value
         if is_forward:
             i += 1
         else:
             i -= 1
-        self.MODE = i % len(DisplayMode)
+        i = i % len(DisplayMode)
+        self.mode = DisplayMode(i)
 
     def action_play(self):
         print("BEFORE" + str(self.time_laps_thread))
-        time_laps_thread = threading.Thread(target=self.start_time_laps, args=(self.delay, self.count))
-        time_laps_thread.start()
+        self._stop_event.clear()
+        self.time_laps_thread = threading.Thread(target=self.start_time_laps)
+        self.time_laps_thread.start()
         # @TODO: change status only if thread started
-        self.STATE = State.RUNNING
-        print("AFTER" + str(time_laps_thread))
+        self.status = State.RUNNING
+        print("AFTER" + str(self.time_laps_thread))
 
     def action_pause(self):
         print(self.time_laps_thread)
         if self.time_laps_thread is not None:
-            self.time_laps_thread.terminate()
-            self.STATE = State.WAITING
+            self._stop_event.set()
+            # self.time_laps_thread = None
+            self.status = State.WAITING
 
     def action_reset(self):
         print("Resetting...")
         self.delay = 1
         self.time_left = 2
         self.count = 0
+        self.action_pause()
+        self.status = State.WAITING
         self.gpContext.unmount_camera()
         self.gpContext.init_camera()
         print("Reset was complete!")
 
-    def start_time_laps(self, d, c):
-        while True:
+    def start_time_laps(self):
+        while not self._stop_event.is_set():
             print('Capturing image')
             file_path = self.gpContext.capture_image()
-            c += 1
+            self.count = self.count + 1
             if file_path is not None:
                 print('Camera file path: {0}/{1}'.format(file_path.folder, file_path.name))
-            print('Count: ' + str(c))
-            time.sleep(d)
+            print('Count: ' + str(self.count))
+            time.sleep(self.delay)
 
     def run(self):
         self.setup()

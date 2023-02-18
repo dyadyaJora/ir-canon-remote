@@ -8,25 +8,53 @@ from piir.decode import decode
 from piir.prettify import prettify
 
 
-class DigitDisplayUtils:
+class LEDAlphabet:
+    # https://github.com/gpiozero/gpiozero/blob/45bccc6201d393fec8f96271f94003fe20138c74/gpiozero/fonts.py
     def __init__(self):
-        pass
+        self.data = self.load()
+
+    def get_char_code(self, char) -> int:
+        if not (char in self.data):
+            return 0x0
+        return self.data[char]
+
+    def load(self):
+        return {
+            '0': 0x3f,
+            '1': 0x06,
+            '2': 0x5b,
+            '3': 0x4f,
+            '4': 0x66,
+            '5': 0x6d,
+            '6': 0x7d,
+            '7': 0x07,
+            '8': 0x7f,
+            '9': 0x6f,
+            'E': 0x01,
+            'r': 0x01,
+            '-': 0x01,
+            '(': 0x01,
+            '_': 0x01,
+            ')': 0x01
+        }
 
 
 class LEDMultiCharDisplayWithShifter:
     LOW = 0
     HIGH = 1
 
-    def __init__(self, digit_count, SDI, SRCLK, RCLK, display_pins):
+    def __init__(self, digit_count, SDI, SRCLK, RCLK, display_pins, lsb_first=False):
         self.display_pins = display_pins
         self.RCLK = RCLK
         self.SRCLK = SRCLK
         self.SDI = SDI
         self.digit_count = digit_count
-        self.digits = [0x0 for _ in range(digit_count)]
+        self.value = [0x0 for _ in range(digit_count)]
         self.pi = pigpio.pi()
         if not self.pi.connected:
             raise IOError
+        self._display_thread = Thread(target=self._display_value)
+        self.alphabet = LEDAlphabet()
         self.setup()
 
     def setup(self):
@@ -60,6 +88,31 @@ class LEDMultiCharDisplayWithShifter:
         for i in self.display_pins:
             self.pi.write(i, self.HIGH)
         self.pi.write(self.display_pins[digit], self.LOW)
+
+    def set_value_code(self, code, index, dp=False):
+        code = code | 128 if dp else code
+        self.value[index] = code
+
+    def set_value_char(self, char, index, dp=False):
+        char_code = self.alphabet.get_char_code(char)
+        self.value[index] = char_code | 128 if dp else char_code
+
+    def set_value_str(self, value):
+        pass
+
+    def start(self):
+        self._display_thread.start()
+
+    def display_value(self):
+        for i in range(len(self.value)):
+            self.clear_display()
+            hex_val = self.value[i]
+            self.pick_digit(i)
+            self.hc595_shift(hex_val)
+
+    def _display_value(self):
+        while True:
+            self.display_value()
 
 
 class IRReceiver(InputDevice):
