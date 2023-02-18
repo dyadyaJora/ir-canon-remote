@@ -77,7 +77,7 @@ class ApplicationContext:
             # print(delay)
 
     def print_status(self):
-        self.print_digit(self.STATE, 3, dp=True)
+        self.print_digit(self.STATE.value, 3, dp=True)
 
     def print_display(self):
         if DisplayMode.DELAY == self.MODE:
@@ -93,11 +93,11 @@ class ApplicationContext:
         self.print_digit(n % 1000 // 100, 2)
 
     def print_digit(self, n, i, dp=False):
-        self.clear_display()
-        self.pick_digit(i)
+        self.led_display.clear_display()
+        self.led_display.pick_digit(i)
         hex_val = self.number[n] | 128 if dp else self.number[n]
         # hex_val = number[n]
-        self.hc595_shift(hex_val)
+        self.led_display.hc595_shift(hex_val)
 
     def destroy(self):
         self.pi.stop()
