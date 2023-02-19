@@ -8,6 +8,8 @@ User=pi
 #Environment=
 ExecStart=python3 /app/ir-timelapser/main.py
 Restart=always
+StandardOutput=append:/var/log/ir-timelapser.log
+StandardError=append:/var/log/ir-timelapser_error.log
 
 [Install]
 WantedBy=multi-user.target
