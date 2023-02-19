@@ -30,12 +30,13 @@ class LEDAlphabet:
             '7': 0x07,
             '8': 0x7f,
             '9': 0x6f,
-            'E': 0x01,
+            'E': 0x79,
             'r': 0x01,
             '-': 0x01,
-            '(': 0x01,
-            '_': 0x01,
-            ')': 0x01
+            ')': 0x02,
+            '(': 0x20,
+            '_': 0x40,
+            '@': 0x63
         }
 
 
@@ -96,9 +97,6 @@ class LEDMultiCharDisplayWithShifter:
     def set_value_char(self, char, index, dp=False):
         char_code = self.alphabet.get_char_code(char)
         self.value[index] = char_code | 128 if dp else char_code
-
-    def set_value_str(self, value):
-        pass
 
     def start(self):
         self._display_thread.start()

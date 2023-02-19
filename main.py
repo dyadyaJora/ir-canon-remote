@@ -42,7 +42,6 @@ class ApplicationContext:
     HIGH = 1
 
     displayPin = (10, 22, 27, 17)
-    number = (0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f)
 
     def __init__(self):
         self.pi = pigpio.pi()
@@ -61,6 +60,26 @@ class ApplicationContext:
         self._delay = 1
         self._time_left = 2
         self._count = 0
+
+        self._animation_thread = None
+
+    class AnimationThread(threading.Thread):
+        def __init__(self, ctx):
+            threading.Thread.__init__(self)
+            self.ctx = ctx
+            self.stop_event = threading.Event()
+            self._elements = ['-', ')', '_', '(']
+            self._index = 0
+
+        def run(self):
+            sleep_time = 1 / (len(self._elements)*2)
+            while not self.stop_event.is_set():
+                self._index = (self._index + 1) % len(self._elements)
+                self.ctx.led_display.set_value_char(str(self._elements[self._index]), 3, dp=True)
+                time.sleep(sleep_time)
+
+        def stop(self):
+            self.stop_event.set()
 
     @property
     def delay(self):
@@ -103,7 +122,18 @@ class ApplicationContext:
     def status(self, value):
         self._status = value
 
-        self.led_display.set_value_char(str(self._status.value), 3, dp=True)
+        if State.RUNNING == self._status:
+            self._animation_thread = self.AnimationThread(self)
+            self._animation_thread.start()
+        else:
+            if self._animation_thread is not None:
+                self._animation_thread.stop()
+
+            if State.WAITING == self._status:
+                used_char = 'E'
+            else:
+                used_char = '@'
+            self.led_display.set_value_char(used_char, 3, dp=True)
 
     @property
     def mode(self):
