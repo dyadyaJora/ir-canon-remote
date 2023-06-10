@@ -5,10 +5,11 @@ description = ""
 authors = ["dyadyaJora <ja_massa97@mail.ru>"]
 
 [tool.poetry.dependencies]
-python = "^3.6"
+python = "^3.8"
 pigpio = "^1.78"
 PiIR = "^0.2.5"
 gpiozero = "^1.6.2"
+pylint = "^2.17.4"
 
 [tool.poetry.dev-dependencies]
 

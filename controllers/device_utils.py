@@ -1,3 +1,7 @@
+"""
+Modules to interact with input and output devices connected to raspberry
+"""
+
 import pigpio
 from gpiozero import OutputDevice, InputDevice
 from gpiozero.pins.pigpio import PiGPIOFactory
@@ -14,7 +18,7 @@ class LEDAlphabet:
         self.data = self.load()
 
     def get_char_code(self, char) -> int:
-        if not (char in self.data):
+        if char not in self.data:
             return 0x0
         return self.data[char]
 
