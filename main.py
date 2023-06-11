@@ -3,7 +3,7 @@ import threading
 import time
 import enum
 
-from controllers.device_utils import IRReceiver, LEDMultiCharDisplayWithShifter
+from controllers.device_utils import IRReceiver, LEDMultiCharDisplayWithShifter, LEDMultiCharDisplayControlPins
 
 try:
     from controllers.gphoto_context import GPhotoContext
@@ -36,6 +36,7 @@ class ApplicationContext:
     SDI = 24
     RCLK = 23
     SRCLK = 18
+    led_control_pins = LEDMultiCharDisplayControlPins(sdi=24, srclk=18, rclk=23)
     IRINPUT = 25
 
     LOW = 0
@@ -159,7 +160,7 @@ class ApplicationContext:
         ir_loader = IRCodesData()
         self.ir_codes = ir_loader.load()
 
-        self.led_display = LEDMultiCharDisplayWithShifter(4, self.SDI, self.SRCLK, self.RCLK, self.displayPin)
+        self.led_display = LEDMultiCharDisplayWithShifter(4, led_control_pins, self.displayPin)
         self.action_reset()
 
         # self.led_display.start()
