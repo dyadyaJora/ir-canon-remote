@@ -73,6 +73,8 @@ class LEDMultiCharDisplayWithShifter:
     LOW = 0
     HIGH = 1
 
+    # pylint: disable=unused-argument
+    # @TODO: use lsb_first to customize bit numbering
     def __init__(self, digit_count, control_pins, display_pins, lsb_first=False):
         self.display_pins = display_pins
         self.control_pins = control_pins
