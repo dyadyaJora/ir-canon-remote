@@ -1,4 +1,8 @@
-from controllers.gphoto_context_base import GPhotoContextBase
+"""
+Module with wrapper for gphoto2 CLI util
+"""
+from gphoto_context_base import GPhotoContextBase
+# pylint: disable=import-error
 import gphoto2 as gp
 import time
 import subprocess
