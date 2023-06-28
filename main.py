@@ -1,9 +1,13 @@
-import pigpio
+"""
+IR timelapser runner
+"""
 import threading
 import time
 import enum
+import pigpio
 
-from controllers.device_utils import IRReceiver, LEDMultiCharDisplayWithShifter, LEDMultiCharDisplayControlPins
+from controllers.device_utils import IRReceiver, LEDMultiCharDisplayWithShifter,\
+    LEDMultiCharDisplayControlPins
 
 try:
     from controllers.gphoto_context import GPhotoContext
@@ -14,18 +18,27 @@ from controllers.ir_codes_data import IRCodesData
 
 
 class State(enum.Enum):
+    """
+    Device possible states
+    """
     WAITING = 0
     RUNNING = 1
     ERROR = 2
 
 
 class DisplayMode(enum.Enum):
+    """
+    Display modes for 7-segment 4 digit LED display
+    """
     DELAY = 0
     COUNTER = 1
     TIMER = 2
 
 
 class ApplicationContext:
+    """
+    Main handler
+    """
     time_laps_thread = None
     camera = None
     ir_codes = None
@@ -45,8 +58,8 @@ class ApplicationContext:
     displayPin = (10, 22, 27, 17)
 
     def __init__(self):
-        self.pi = pigpio.pi()
-        if not self.pi.connected:
+        self.rpi = pigpio.pi()
+        if not self.rpi.connected:
             raise IOError
         self.ir_receiver = None
         self.led_display = None
@@ -173,7 +186,7 @@ class ApplicationContext:
             self.led_display.display_value()
 
     def destroy(self):
-        self.pi.stop()
+        self.rpi.stop()
 
     def handle_ir_code(self, last):
         for l in last:
