@@ -1,25 +1,29 @@
 """
 Module with wrapper for gphoto2 CLI util
 """
-from gphoto_context_base import GPhotoContextBase
-# pylint: disable=import-error
-import gphoto2 as gp
+
 import time
 import subprocess
 import os
 import signal
+from gphoto_context_base import GPhotoContextBase
+# pylint: disable=import-error
+import gphoto2 as gp
 
 
 class GPhotoContext(GPhotoContextBase):
+    """
+    Implementation of application context for gphoto2 CLI util
+    """
     def __init__(self):
         self.camera = None
-        self.maxRetry = 3
+        self.max_retry = 3
 
     def init_camera(self):
         self.camera = gp.Camera()
         print('Please connect and switch on your camera')
         i = 0
-        while i < self.maxRetry:
+        while i < self.max_retry:
             i += 1
             print("Init camera, try number: " + str(i))
             try:
@@ -40,10 +44,11 @@ class GPhotoContext(GPhotoContextBase):
         return self.camera.capture(gp.GP_CAPTURE_IMAGE)
 
     def unmount_camera(self):
-        p = subprocess.Popen(["ps", "-A"], stdout=subprocess.PIPE)
-        out, err = p.communicate()
+        with subprocess.Popen(["ps", "-A"], stdout=subprocess.PIPE) as proc:
+            out, _ = proc.communicate()
 
-        for line in out.splitlines():
-            if b'-gphoto' in line:
-                pid = int(line.split(None, 1)[0])
-                os.kill(pid, signal.SIGKILL)
+            for line in out.splitlines():
+                if b'-gphoto' in line:
+                    pid = int(line.split(None, 1)[0])
+                    # pylint: disable=no-member
+                    os.kill(pid, signal.SIGKILL)
